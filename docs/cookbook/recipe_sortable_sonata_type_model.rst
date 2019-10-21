@@ -85,7 +85,7 @@ We now need to create the join entity configuration, create the following file i
                 <join-column name="user_id" referenced-column-name="id" on-delete="CASCADE"/>
             </many-to-one>
 
-            <many-to-one field="expectation" target-entity="UserBundle\Entity\Expectation" inversed-by="userHasExpectations" orphan-removal="false">
+            <many-to-one field="expectation" target-entity="UserBundle\Entity\Expectation" orphan-removal="false">
                 <join-column name="expectation_id" referenced-column-name="id" on-delete="CASCADE"/>
             </many-to-one>
         </entity>
@@ -119,7 +119,7 @@ Update the ``UserBundle\Entity\User.php`` entity with the following::
     }
 
     /**
-     * @return ArrayCollection
+     * @return Collection
      */
     public function getUserHasExpectations()
     {
@@ -146,37 +146,6 @@ Update the ``UserBundle\Entity\User.php`` entity with the following::
         $this->userHasExpectations->removeElement($userHasExpectations);
 
         return $this;
-    }
-
-Update the ``UserBundle\Entity\Expectation.php`` entity with the following::
-
-    /**
-     * @var UserHasExpectations[]
-     */
-    protected $userHasExpectations;
-
-    /**
-     * @param UserHasExpectations[] $userHasExpectations
-     */
-    public function setUserHasExpectations($userHasExpectations)
-    {
-        $this->userHasExpectations = $userHasExpectations;
-    }
-
-    /**
-     * @return UserHasExpectations[]
-     */
-    public function getUserHasExpectations()
-    {
-        return $this->userHasExpectations;
-    }
-
-    /**
-     * @return string
-     */
-    public function __toString()
-    {
-        return $this->getLabel();
     }
 
 Create the ``UserBundle\Entity\UserHasExpectations.php`` entity with the following::
@@ -337,16 +306,18 @@ Now update the ``UserBundle\Admin\UserAdmin.php`` by adding the ``sonata_type_mo
             ->add('userHasExpectations', 'sonata_type_model', [
                 'label'        => 'User\'s expectations',
                 'query'        => $this->modelManager->createQuery('UserBundle\Entity\Expectation'),
+                'class'        => 'UserBundle\Entity\Expectation',
                 'required'     => false,
                 'multiple'     => true,
                 'by_reference' => false,
                 'sortable'     => true,
+                'btn_add'      => false,
             ])
         ;
 
         $formMapper
             ->get('userHasExpectations')
-            ->addModelTransformer(new ExpectationDataTransformer($this->getSubject(), $this->modelManager));
+            ->addModelTransformer(new ExpectationDataTransformer($this->getSubject()));
     }
 
 There is two important things that we need to show here :
@@ -368,15 +339,9 @@ to handle the conversion of ``Expectation`` to ``UserHasExpectations``::
          */
         private $user;
 
-        /**
-         * @var ModelManager $modelManager
-         */
-        private $modelManager;
-
-        public function __construct(User $user, ModelManager $modelManager)
+        public function __construct(User $user)
         {
-            $this->user         = $user;
-            $this->modelManager = $modelManager;
+            $this->user = $user;
         }
 
         public function transform($data)
@@ -402,28 +367,12 @@ to handle the conversion of ``Expectation`` to ``UserHasExpectations``::
 
             /** @var Expectation $expectation */
             foreach ($expectations as $expectation) {
-                $userHasExpectations = $this->create();
+                $userHasExpectations = new UserHasExpectations();
                 $userHasExpectations->setExpectation($expectation);
                 $userHasExpectations->setPosition($position++);
 
                 $results->add($userHasExpectations);
             }
-
-            // Remove Old values
-            $qb   = $this->modelManager->getEntityManager()->createQueryBuilder();
-            $expr = $this->modelManager->getEntityManager()->getExpressionBuilder();
-
-            $userHasExpectationsToRemove = $qb->select('entity')
-                                               ->from($this->getClass(), 'entity')
-                                               ->where($expr->eq('entity.user', $this->user->getId()))
-                                               ->getQuery()
-                                               ->getResult();
-
-            foreach ($userHasExpectationsToRemove as $userHasExpectations) {
-                $this->modelManager->delete($userHasExpectations, false);
-            }
-
-            $this->modelManager->getEntityManager()->flush();
 
             return $results;
         }
